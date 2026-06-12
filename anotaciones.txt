@@ -1,0 +1,13 @@
+//ANOTACIONES//
+1. ARP SCANNER ya lo tengo hecho asi que lo puedo incorporar al flujo
+2. Doy opciones en base a lo descubierto
+3.A. Si es la primera vez comunicandome con esta IP, le asigno un nombre
+3.B Puedo modificar el nombre si quiero
+3.C Podria ponerle una password al chat(tmb modificarla)?
+4.A. Mando msj y se crea un log del chat(sino podria ser un json global que tenga un dict y dentro de ese dict se guarda cada IP/MAC, USERNAME, password y convo)
+4.B. Largo el log si ya existe
+5. Opcion de borrar mensaje, editar y borrar convo(primero seria para uno mismo y dsp ver una opcion para que tambien se le borre al otro(solo se le borra al otro los mensajes que uno envio, no los de el))
+6. Opcion de bloqueo de IP/MAC ya sea bloqueandolo por USERNAME( que esta vinculado) lo cual facilita al usuario ya que no tiene que saber  la ip ni la mac
+7. Opcion de desbloqueo
+8. Modo efimero?
+`
