@@ -1,5 +1,4 @@
 import auxiliar
-import chat
 import gui
 import scanner
 
