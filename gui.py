@@ -39,6 +39,11 @@ def iniciar_gui(receptor):
             escribir(f"{addr[0]}: {msg}")
         root.after(100, drenar_cola)
 
+    def on_close():
+        chat.cerrar()  # chat apaga su propio socket
+        root.destroy()  # tkinter cierra la ventana y corta el mainloop
+
     chat.iniciar_receptor()
+    root.protocol("WM_DELETE_WINDOW", on_close)
     root.after(100, drenar_cola)
     root.mainloop()

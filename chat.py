@@ -16,9 +16,21 @@ def send_msg(msg, receptor):
 
 def loop_red():
     while True:
-        data, addr = sock.recvfrom(1024)
-        texto = data.decode("utf-8")
-        cola.put((texto, addr))  # tupla mejor que lista para un registro fijo
+        try:
+            data, addr = sock.recvfrom(
+                1024
+            )  # estos son 1024 bytes lo cual me puede dejar corto en un futuro
+        except OSError:
+            break
+        try:
+            texto = data.decode("utf-8")
+            cola.put((texto, addr))  # tupla mejor que lista para un registro fijo
+        except UnicodeDecodeError:
+            pass
+
+
+def cerrar():
+    sock.close()
 
 
 def iniciar_receptor():
