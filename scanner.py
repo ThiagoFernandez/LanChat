@@ -1,40 +1,21 @@
 import socket
-import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 
 import colorama
 from scapy.all import ARP, Ether, srp
 
 import auxiliar
 
-socket.gethostbyname(socket.gethostname())
 colorama.init()
 
 
-def get_mi_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))  # no manda nada, solo determina la interfaz
-        return s.getsockname()[0]
-    finally:
-        s.close()
+def get_paquete(red):
 
-
-def get_paquete():
-    resultado = auxiliar.validat_args()
-    if resultado == -1:
-        return -1
-
-    arp = ARP(
-        pdst=resultado
-    )  # yo le paso la subred y scapy la expande a todo su dominio
+    arp = ARP(pdst=red)  # yo le paso la subred y scapy la expande a todo su dominio
     ether = Ether(
         dst="ff:ff:ff:ff:ff:ff"
     )  # Es la MAC de broadcast, con esto todos los dipositivos reciben el broadcast
-
-    paquete = ether / arp
-    return paquete
+    return ether / arp
 
 
 def enviar_paquete(paquete):
@@ -81,7 +62,7 @@ def get_resultados(si_rta):
     return dispositivos
 
 
-def ver_resultados(resultados, si, no):
+def ver_resultados(resultados):
     if not resultados:
         print("No encontro nada")
         return
@@ -105,7 +86,7 @@ def ver_resultados(resultados, si, no):
     print("-" * (4 + anchos["ip"] + anchos["mac"] + anchos["hostname"] + 4))
 
     # filas
-    mi_ip = get_mi_ip()
+    mi_ip = auxiliar.obtener_mi_ip()
     for idx, d in enumerate(resultados, 1):
         if mi_ip == d["ip"]:
             print(
@@ -116,24 +97,8 @@ def ver_resultados(resultados, si, no):
                 f"{idx:<4} {d['ip']:<{anchos['ip']}} {d['mac']:<{anchos['mac']}} {d['hostname']:<{anchos['hostname']}}"
             )
 
-    print(f"\nTotal con respuesta: {len(si)}\nTotal sin respuesta: {len(no)}")
 
-
-def start_scanner():
-    start = datetime.now()
-    paquete = get_paquete()
-    if paquete == -1:
-        return
-    si_rta, no_rta = enviar_paquete(paquete)
-    dispositivos = get_resultados(si_rta)
-    print("Desea ver los resultados?")
-    options = ["SI", "NO"]
-    auxiliar.show_options(options)
-    opt = auxiliar.validate_number(options)
-    if opt == -1:
-        return
-    ver_resultados(dispositivos, si_rta, no_rta)
-    end = datetime.now()
-    elapsed = (end - start).total_seconds()
-    print(f"Tiempo: {elapsed:.2f} segundos")
-    return dispositivos
+def start_scanner(red):
+    paquete = get_paquete(red)
+    si_rta, _ = enviar_paquete(paquete)
+    return get_resultados(si_rta)

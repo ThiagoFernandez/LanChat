@@ -88,6 +88,18 @@ def validat_args():
     return usr_input
 
 
+def validate_input():
+    usr_input = input("Write your IP and Mask (192.168.x.x/24): ")
+    if usr_input == "":
+        return -1
+    resultado = validate_ipv4(usr_input)
+    if resultado == -1:
+        return -1
+    mask, ipv4 = resultado
+    print(f"ip: {ipv4} --- mascara: {mask}")
+    return usr_input
+
+
 def show_options(options):
     for idx, value in enumerate(options):
         print(f"{idx + 1}. {value}")
