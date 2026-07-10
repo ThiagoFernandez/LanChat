@@ -5,8 +5,11 @@ import auxiliar
 import chat
 import scanner
 
+ip = auxiliar.obtener_mi_ip()
+
 
 def iniciar_app():
+
     root = tk.Tk()
     root.title("LanChat by ZANTO")
     root.minsize(300, 400)
@@ -84,7 +87,12 @@ def mostrar_chat(root, receptor):
         texto = entrada.get().strip()
         if not texto:
             return
-        chat.send_msg(texto, receptor)
+        dic = chat.create_msg(
+            ip, texto
+        )  # por ahora no pongo tipo porque eso seria como un boto/checklist q marca el user
+
+        j = chat.encode_dic(dic)
+        chat.send_msg(j, receptor)
         escribir(f"Yo: {texto}")
         entrada.delete(0, "end")
 
@@ -95,10 +103,12 @@ def mostrar_chat(root, receptor):
     def drenar_cola():
         while True:
             try:
-                msg, addr = chat.cola.get_nowait()
+                dic, addr = chat.cola.get_nowait()
             except queue.Empty:
                 break
-            escribir(f"{addr[0]}: {msg}")
+            emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
+            msg = dic["content"]
+            escribir(f"{emisor}: {msg}")
         root.after(100, drenar_cola)
 
     chat.iniciar_receptor()

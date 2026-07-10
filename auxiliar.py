@@ -121,6 +121,16 @@ def validate_number(options):
                 return option
 
 
+def is_integer(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+    except TypeError:
+        return False
+
+
 def validate_numberv2():
     while True:
         try:
