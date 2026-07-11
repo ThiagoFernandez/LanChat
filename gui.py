@@ -71,17 +71,28 @@ def mostrar_hosts(root, dispositivos):
 def mostrar_chat(root, receptor):
     frame = tk.Frame(root)
     frame.pack()
-    def on_click(event):
-        idx = historial.index(f"@{event.x},{event.y}")
-        tags = historial.tag_names(idx)
-        tag = next((t for t in tags if "#" in t), None)
-        if tag is None:
-            return # verifico q este el #
+    def on_clickl(event):
+        tag = helper_menu(event)
+        if not tag:
+            return
         menu = tk.Menu(root, tearoff=0)
         menu.add_command(label="Borrar para mi", command=lambda: self_delete(tag))
         if tag.split("#")[0] == ip:
             menu.add_command(label="Borrar para ambos", command=lambda: all_delete(tag))
         menu.tk_popup(event.x_root, event.y_root)
+
+    def on_clickr(event):
+        tag = helper_menu(event)
+        if not tag:
+            return
+        menu = tk.Menu(root, tearoff=0)
+        menu.add_command(label="Editar para mi", command=lambda: self_edit(tag))
+        if tag.split("#")[0]== ip:
+            menu.add_command(label="Editar para mi", command=lambda: all_edit(tag))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def self_edit(tag):
+
 
     def self_delete(tag):
         borrar_local(tag)
@@ -96,7 +107,8 @@ def mostrar_chat(root, receptor):
 
     historial = tk.Text(frame, state="disabled")
     historial.pack()
-    historial.bind("<Button-1>", on_click)
+    historial.bind("<Button-1>", on_clickl)
+    historial.bind("<Button-2>", on_clickr)
     entrada = tk.Entry(frame)
     entrada.pack()
 
@@ -139,6 +151,7 @@ def mostrar_chat(root, receptor):
 
     def edit_msg(dic):
         # igual aca solo se puede mensajes que uno envio, esto lo que haria seria obligar al otro editar ese mnsaje asi ambos ven lo mismo
+
         pass
 
     def drenar_cola():
@@ -157,6 +170,12 @@ def mostrar_chat(root, receptor):
                     edit_msg(dic)
         root.after(100, drenar_cola)
 
+    def edit_local(tag):
+        tupla = historial.tag_ranges(tag)
+        if tupla:
+            historial.config(state="normal")
+
+
     def borrar_local(tag):
         tupla = historial.tag_ranges(tag)
         if tupla:
@@ -167,6 +186,15 @@ def mostrar_chat(root, receptor):
             return True
         else:
             return False
+
+    def helper_menu(event):
+        idx = historial.index(f"@{event.x},{event.y}")
+        tags = historial.tag_names(idx)
+        tag = next((t for t in tags if "#" in t), None)
+        if tag is None:
+            return False
+        else:
+            return tag
 
     chat.iniciar_receptor()
     root.after(100, drenar_cola)
