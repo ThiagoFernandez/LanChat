@@ -71,15 +71,38 @@ def mostrar_hosts(root, dispositivos):
 def mostrar_chat(root, receptor):
     frame = tk.Frame(root)
     frame.pack()
+    def on_click(event):
+        idx = historial.index(f"@{event.x},{event.y}")
+        tags = historial.tag_names(idx)
+        tag = next((t for t in tags if "#" in t), None)
+        if tag is None:
+            return # verifico q este el #
+        menu = tk.Menu(root, tearoff=0)
+        menu.add_command(label="Borrar para mi", command=lambda: self_delete(tag))
+        if tag.split("#")[0] == ip:
+            menu.add_command(label="Borrar para ambos", command=lambda: all_delete(tag))
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def self_delete(tag):
+        borrar_local(tag)
+
+    def all_delete(tag):
+        rt = borrar_local(tag)
+        if rt:
+            id = int(tag.split("#")[1])
+            dic = chat.create_msg(ip, id, "delete")
+            j = chat.encode_dic(dic)
+            chat.send_msg(j, receptor)
 
     historial = tk.Text(frame, state="disabled")
     historial.pack()
+    historial.bind("<Button-1>", on_click)
     entrada = tk.Entry(frame)
     entrada.pack()
 
-    def escribir(linea):
+    def escribir(linea, tag):
         historial.config(state="normal")
-        historial.insert("end", linea + "\n")
+        historial.insert("end", linea + "\n", tag)
         historial.config(state="disabled")
         historial.see("end")
 
@@ -93,12 +116,33 @@ def mostrar_chat(root, receptor):
 
         j = chat.encode_dic(dic)
         chat.send_msg(j, receptor)
-        escribir(f"Yo: {texto}")
+        tag = f"{ip}#{dic["id"]}"
+        escribir(f"Yo: {texto}", tag)
         entrada.delete(0, "end")
 
     boton = tk.Button(frame, text="Enviar/Send", command=on_enviar)
     boton.pack()
     entrada.bind("<Return>", lambda e: on_enviar())
+
+    def show_msg(dic):
+        emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
+        msg = dic["content"]
+        id = dic["id"]
+        tag = f"{emisor}#{id}"
+        escribir(f"{emisor}: {msg} --- id:{id}", tag)
+
+    def delete_msg(dic):
+        emisor = dic["emisor"]
+        id = dic["content"]
+        tag = f"{emisor}#{id}"
+        tupla = historial.tag_ranges(tag)
+        if tupla:
+            historial.delete(tupla[0], tupla[1])
+            historial.tag_delete(tag)
+
+    def edit_msg(dic):
+        # igual aca solo se puede mensajes que uno envio, esto lo que haria seria obligar al otro editar ese mnsaje asi ambos ven lo mismo
+        pass
 
     def drenar_cola():
         while True:
@@ -106,10 +150,24 @@ def mostrar_chat(root, receptor):
                 dic, addr = chat.cola.get_nowait()
             except queue.Empty:
                 break
-            emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
-            msg = dic["content"]
-            escribir(f"{emisor}: {msg}")
+
+            match dic["tipo"]:
+                case "msg":
+                    show_msg(dic)
+                case "delete":
+                    delete_msg(dic)
+                case "edit":
+                    edit_msg(dic)
         root.after(100, drenar_cola)
+
+    def borrar_local(tag):
+        tupla = historial.tag_ranges(tag)
+        if tupla:
+            historial.delete(tupla[0], tupla[1])
+            historial.tag_delete(tag)
+            return True
+        else:
+            return False
 
     chat.iniciar_receptor()
     root.after(100, drenar_cola)

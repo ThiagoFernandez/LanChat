@@ -11,15 +11,17 @@ sock.bind(("0.0.0.0", PUERTO))  # 0.0.0.0 = todas las interfaces
 
 cola = queue.Queue()
 
+contador = 0
 
 def create_msg(
     emisor, txt=None, tipo="msg"
 ):  # aunque podria ser sin default todos ya que el user en la gui podria decidir eso
-    # todavia no defini d edonde agarrar el contador y guardarlo
-    #
+
+    global contador
+    contador+=1
     dic = {
         "tipo": tipo,
-        "id": 1,  # dsp lo cambio
+        "id": contador,
         "emisor": emisor,
         "content": txt,
     }
@@ -53,11 +55,11 @@ def validate_dic(dic):
     if len(keys) != 4:  # con esto corrijo el bug 2
         return -1
 
-    # pense q importaban el orden de las claves
     if "tipo" in keys and "id" in keys and "emisor" in keys and "content" in keys:
         if dic["tipo"] in ["msg", "delete", "edit"]:
             if isinstance(dic["id"], int) and not isinstance(dic["id"], bool):
-                return 1
+                if dic["id"] >=1:
+                    return 1
 
     return -1
 
