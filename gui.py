@@ -1,6 +1,6 @@
 import queue
 import tkinter as tk
-
+from tkinter import simpledialog
 import auxiliar
 import chat
 import scanner
@@ -86,13 +86,22 @@ def mostrar_chat(root, receptor):
         if not tag:
             return
         menu = tk.Menu(root, tearoff=0)
-        menu.add_command(label="Editar para mi", command=lambda: self_edit(tag))
         if tag.split("#")[0]== ip:
-            menu.add_command(label="Editar para mi", command=lambda: all_edit(tag))
+            menu.add_command(label="Editar mensaje", command=lambda: all_edit(tag))
         menu.tk_popup(event.x_root, event.y_root)
 
-    def self_edit(tag):
+    def all_edit(tag):
+        newMsg = simpledialog.askstring("Editar", "Nuevo texto:")
+        if not newMsg:
+            return
+        linea = f"{ip}: {newMsg} --- id:{tag.split("#")[1]}"
+        tupla = editar_local(tag, linea)
 
+        if tupla:
+            id = int(tag.split("#")[1])
+            dic = chat.create_msg(ip, txt=newMsg, tipo="edit", idObjetivo=id)
+            j = chat.encode_dic(dic)
+            chat.send_msg(j, receptor)
 
     def self_delete(tag):
         borrar_local(tag)
@@ -101,14 +110,14 @@ def mostrar_chat(root, receptor):
         rt = borrar_local(tag)
         if rt:
             id = int(tag.split("#")[1])
-            dic = chat.create_msg(ip, id, "delete")
+            dic = chat.create_msg(ip, tipo="delete", idObjetivo=id)
             j = chat.encode_dic(dic)
             chat.send_msg(j, receptor)
 
     historial = tk.Text(frame, state="disabled")
     historial.pack()
     historial.bind("<Button-1>", on_clickl)
-    historial.bind("<Button-2>", on_clickr)
+    historial.bind("<Button-3>", on_clickr)
     entrada = tk.Entry(frame)
     entrada.pack()
 
@@ -124,7 +133,7 @@ def mostrar_chat(root, receptor):
             return
         dic = chat.create_msg(
             ip, texto
-        )  # por ahora no pongo tipo porque eso seria como un boto/checklist q marca el user
+        )
 
         j = chat.encode_dic(dic)
         chat.send_msg(j, receptor)
@@ -136,23 +145,23 @@ def mostrar_chat(root, receptor):
     boton.pack()
     entrada.bind("<Return>", lambda e: on_enviar())
 
-    def show_msg(dic):
+    def show_msg(dic): #opt 1 de lo q llega
         emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
-        msg = dic["content"]
+        msg = dic["content"]["txt"]
         id = dic["id"]
         tag = f"{emisor}#{id}"
-        escribir(f"{emisor}: {msg} --- id:{id}", tag)
+        escribir(f"{emisor}: {msg}", tag)
 
-    def delete_msg(dic):
-        emisor = dic["emisor"]
-        id = dic["content"]
-        tag = f"{emisor}#{id}"
+    def delete_msg(dic): #opt 2 de lo q llega
+        tag = get_tag_opt_2_3(dic)
         borrar_local(tag)
 
-    def edit_msg(dic):
-        # igual aca solo se puede mensajes que uno envio, esto lo que haria seria obligar al otro editar ese mnsaje asi ambos ven lo mismo
+    def edit_msg(dic): #opt 3 de lo q llega
+        tag = get_tag_opt_2_3(dic)
+        newMsg = dic["content"]["txt"]
+        linea = f"{dic["emisor"]}: {newMsg} --- id:{dic["content"]["idObjetivo"]}"
+        editar_local(tag, linea)
 
-        pass
 
     def drenar_cola():
         while True:
@@ -170,18 +179,23 @@ def mostrar_chat(root, receptor):
                     edit_msg(dic)
         root.after(100, drenar_cola)
 
-    def edit_local(tag):
-        tupla = historial.tag_ranges(tag)
-        if tupla:
-            historial.config(state="normal")
-
-
     def borrar_local(tag):
         tupla = historial.tag_ranges(tag)
         if tupla:
             historial.config(state="normal")
             historial.delete(tupla[0], tupla[1])
             historial.tag_delete(tag)
+            historial.config(state="disabled")
+            return True
+        else:
+            return False
+
+    def editar_local(tag, newMsg):
+        tupla = historial.tag_ranges(tag)
+        if tupla:
+            historial.config(state="normal")
+            historial.delete(tupla[0], tupla[1])
+            historial.insert(tupla[0], newMsg+"\n", tag)
             historial.config(state="disabled")
             return True
         else:
@@ -195,6 +209,12 @@ def mostrar_chat(root, receptor):
             return False
         else:
             return tag
+
+    def get_tag_opt_2_3(dic):
+        emisor = dic["emisor"]
+        id = dic["content"]["idObjetivo"]
+        tag = f"{emisor}#{id}"
+        return tag
 
     chat.iniciar_receptor()
     root.after(100, drenar_cola)

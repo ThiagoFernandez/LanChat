@@ -14,16 +14,20 @@ cola = queue.Queue()
 contador = 0
 
 def create_msg(
-    emisor, txt=None, tipo="msg"
+    emisor, txt=None, tipo="msg", idObjetivo = None
 ):  # aunque podria ser sin default todos ya que el user en la gui podria decidir eso
 
     global contador
     contador+=1
+
     dic = {
         "tipo": tipo,
         "id": contador,
         "emisor": emisor,
-        "content": txt,
+        "content": {
+            "txt": txt ,
+            "idObjetivo": idObjetivo
+        },
     }
 
     return dic
@@ -59,7 +63,14 @@ def validate_dic(dic):
         if dic["tipo"] in ["msg", "delete", "edit"]:
             if isinstance(dic["id"], int) and not isinstance(dic["id"], bool):
                 if dic["id"] >=1:
-                    return 1
+                    if isinstance(dic["content"], dict):
+                        if ["txt", "idObjetivo"]==list(dic["content"].keys()):
+                            if dic["tipo"] == "delete" or dic["tipo"] == "edit":
+                                if isinstance(dic["content"]["idObjetivo"], int) and not isinstance(dic["content"]["idObjetivo"], bool):
+                                    if dic["content"]["idObjetivo"] >= 1:
+                                        return 1
+                            else:
+                                return 1
 
     return -1
 
