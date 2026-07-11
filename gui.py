@@ -135,10 +135,7 @@ def mostrar_chat(root, receptor):
         emisor = dic["emisor"]
         id = dic["content"]
         tag = f"{emisor}#{id}"
-        tupla = historial.tag_ranges(tag)
-        if tupla:
-            historial.delete(tupla[0], tupla[1])
-            historial.tag_delete(tag)
+        borrar_local(tag)
 
     def edit_msg(dic):
         # igual aca solo se puede mensajes que uno envio, esto lo que haria seria obligar al otro editar ese mnsaje asi ambos ven lo mismo
@@ -163,8 +160,10 @@ def mostrar_chat(root, receptor):
     def borrar_local(tag):
         tupla = historial.tag_ranges(tag)
         if tupla:
+            historial.config(state="normal")
             historial.delete(tupla[0], tupla[1])
             historial.tag_delete(tag)
+            historial.config(state="disabled")
             return True
         else:
             return False
