@@ -68,15 +68,15 @@ def mostrar_hosts(root, dispositivos):
         frame, height=len(dispositivos)
     )  # todos los widgets d estas pantalals deben colgar del root y no del frame porque sino sobrevive
     lista.pack(fill="both", expand=True)
-    idx = 0
+    idx = None
     cont=-1
-    for d in dispositivos:
-        cont+=1
+    for cont, d in enumerate(dispositivos):
         if d["ip"] == ip:
             idx= cont
         lista.insert("end", f"{d['ip']} - {d['hostname']}")
 
-    lista.itemconfig(idx, {"fg": "dark green"})
+    if ip is not None:
+        lista.itemconfig(idx, {"fg": "dark green"})
 
     def conectar():
         selection = lista.curselection()
