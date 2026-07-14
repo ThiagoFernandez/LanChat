@@ -1,6 +1,8 @@
 import queue
 import tkinter as tk
-from tkinter import simpledialog
+from tkinter import simpledialog, ttk
+
+import threading
 import auxiliar
 import chat
 import scanner
@@ -35,12 +37,26 @@ def mostrar_red(root):
         red = entrada.get().strip()
         if auxiliar.validate_ipv4(red) == -1:
             return
+
+        tk.Label(frame, text=f"Escaneando la red: {red}").pack()
+        boton.config(state="disabled")
+        barra = ttk.Progressbar(frame, mode="indeterminate")
+        barra.pack(pady=5)
+        barra.start()
+        threading.Thread(target=worker, args=(red,), daemon=True).start()
+
+
+
+    boton = tk.Button(frame, text="Escanear", command=escanear)
+    boton.pack(pady=10)
+
+    def worker(red):
         dispositivos = scanner.start_scanner(red)
+        root.after(0, lambda:finish(dispositivos))
+
+    def finish(dispositivos):
         frame.destroy()
         mostrar_hosts(root, dispositivos)
-
-    tk.Button(frame, text="Escanear", command=escanear).pack(pady=10)
-
 
 def mostrar_hosts(root, dispositivos):
     frame = tk.Frame(root)
@@ -52,8 +68,15 @@ def mostrar_hosts(root, dispositivos):
         frame, height=len(dispositivos)
     )  # todos los widgets d estas pantalals deben colgar del root y no del frame porque sino sobrevive
     lista.pack(fill="both", expand=True)
+    idx = 0
+    cont=-1
     for d in dispositivos:
+        cont+=1
+        if d["ip"] == ip:
+            idx= cont
         lista.insert("end", f"{d['ip']} - {d['hostname']}")
+
+    lista.itemconfig(idx, {"fg": "dark green"})
 
     def conectar():
         selection = lista.curselection()
@@ -94,7 +117,7 @@ def mostrar_chat(root, receptor):
         newMsg = simpledialog.askstring("Editar", "Nuevo texto:")
         if not newMsg:
             return
-        linea = f"{ip}: {newMsg} --- id:{tag.split("#")[1]}"
+        linea = f"Yo: {newMsg}"
         tupla = editar_local(tag, linea)
 
         if tupla:
@@ -150,6 +173,8 @@ def mostrar_chat(root, receptor):
         msg = dic["content"]["txt"]
         id = dic["id"]
         tag = f"{emisor}#{id}"
+        # if emisor == ip:
+        #     emisor = "Yo"
         escribir(f"{emisor}: {msg}", tag)
 
     def delete_msg(dic): #opt 2 de lo q llega
@@ -159,7 +184,10 @@ def mostrar_chat(root, receptor):
     def edit_msg(dic): #opt 3 de lo q llega
         tag = get_tag_opt_2_3(dic)
         newMsg = dic["content"]["txt"]
-        linea = f"{dic["emisor"]}: {newMsg} --- id:{dic["content"]["idObjetivo"]}"
+        emisor = dic["emisor"]
+        # if emisor == ip:
+            # emisor = "Yo"
+        linea = f"{emisor}: {newMsg}"
         editar_local(tag, linea)
 
 
@@ -215,6 +243,7 @@ def mostrar_chat(root, receptor):
         id = dic["content"]["idObjetivo"]
         tag = f"{emisor}#{id}"
         return tag
+
 
     chat.iniciar_receptor()
     root.after(100, drenar_cola)

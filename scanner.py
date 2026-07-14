@@ -1,6 +1,8 @@
 import socket
 from concurrent.futures import ThreadPoolExecutor
 
+from nmb.NetBIOS import NetBIOS
+
 import colorama
 from scapy.all import ARP, Ether, srp
 
@@ -28,9 +30,20 @@ def get_hostname(ip):
     try:
         hostname = socket.gethostbyaddr(ip)[0]
     except socket.herror:
-        hostname = "N/A"
+        rt = get_netbios_name(ip)
+        if rt is not None:
+            hostname = rt
+        else:
+            hostname = "N/A"
     return hostname
 
+def get_netbios_name(ip, timeout=2):
+    nb = NetBIOS()
+    try:
+        names = nb.queryIPForName(ip, timeout=timeout)   #por lo q vi, esto va al udp puerto num 137
+        return names[0] if names else None
+    finally:
+        nb.close()
 
 def get_hosts(dispositivos):
     hosts = []
