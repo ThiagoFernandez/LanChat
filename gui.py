@@ -1,11 +1,12 @@
 import queue
 import tkinter as tk
-from tkinter import simpledialog, ttk
+from tkinter import simpledialog, ttk, messagebox
 
 import threading
 import auxiliar
 import chat
 import scanner
+import storage
 
 ip = auxiliar.obtener_mi_ip()
 
@@ -69,14 +70,14 @@ def mostrar_hosts(root, dispositivos):
     )  # todos los widgets d estas pantalals deben colgar del root y no del frame porque sino sobrevive
     lista.pack(fill="both", expand=True)
     idx = None
-    cont=-1
+
     for cont, d in enumerate(dispositivos):
         if d["ip"] == ip:
             idx= cont
-        lista.insert("end", f"{d['ip']} - {d['hostname']}")
+        lista.insert("end", f"{d['ip']} - {d['mac']} - {d['hostname']}")
 
-    if ip is not None:
-        lista.itemconfig(idx, {"fg": "dark green"})
+    if idx is not None:
+        lista.itemconfig(idx, {"fg": "dark green"}) # podria hacerlo -1 de default y listo pero bueno
 
     def conectar():
         selection = lista.curselection()
@@ -84,14 +85,16 @@ def mostrar_hosts(root, dispositivos):
             return
 
         idx = selection[0]
-        receptor = dispositivos[idx]["ip"]
+        receptor_ip = dispositivos[idx]["ip"]
+        receptor_mac = dispositivos[idx]["mac"]
         frame.destroy()
-        mostrar_chat(root, receptor)
+        mostrar_chat(root, receptor_ip, receptor_mac)
 
     tk.Button(frame, text="Connect", command=conectar).pack(pady=10)
 
 
-def mostrar_chat(root, receptor):
+def mostrar_chat(root, receptor_ip, receptor_mac):
+    agenda = storage.load()
     frame = tk.Frame(root)
     frame.pack()
     def on_clickl(event):
@@ -124,7 +127,7 @@ def mostrar_chat(root, receptor):
             id = int(tag.split("#")[1])
             dic = chat.create_msg(ip, txt=newMsg, tipo="edit", idObjetivo=id)
             j = chat.encode_dic(dic)
-            chat.send_msg(j, receptor)
+            chat.send_msg(j, receptor_ip)
 
     def self_delete(tag):
         borrar_local(tag)
@@ -135,7 +138,7 @@ def mostrar_chat(root, receptor):
             id = int(tag.split("#")[1])
             dic = chat.create_msg(ip, tipo="delete", idObjetivo=id)
             j = chat.encode_dic(dic)
-            chat.send_msg(j, receptor)
+            chat.send_msg(j, receptor_ip)
 
     historial = tk.Text(frame, state="disabled")
     historial.pack()
@@ -159,7 +162,7 @@ def mostrar_chat(root, receptor):
         )
 
         j = chat.encode_dic(dic)
-        chat.send_msg(j, receptor)
+        chat.send_msg(j, receptor_ip)
         tag = f"{ip}#{dic["id"]}"
         escribir(f"Yo: {texto}", tag)
         entrada.delete(0, "end")
@@ -172,10 +175,11 @@ def mostrar_chat(root, receptor):
         emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
         msg = dic["content"]["txt"]
         id = dic["id"]
+        username = helper_username()
         tag = f"{emisor}#{id}"
         # if emisor == ip:
         #     emisor = "Yo"
-        escribir(f"{emisor}: {msg}", tag)
+        escribir(f"{username}: {msg}", tag)
 
     def delete_msg(dic): #opt 2 de lo q llega
         tag = get_tag_opt_2_3(dic)
@@ -184,10 +188,8 @@ def mostrar_chat(root, receptor):
     def edit_msg(dic): #opt 3 de lo q llega
         tag = get_tag_opt_2_3(dic)
         newMsg = dic["content"]["txt"]
-        emisor = dic["emisor"]
-        # if emisor == ip:
-            # emisor = "Yo"
-        linea = f"{emisor}: {newMsg}"
+        username = helper_username()
+        linea = f"{username}: {newMsg}"
         editar_local(tag, linea)
 
 
@@ -243,6 +245,9 @@ def mostrar_chat(root, receptor):
         id = dic["content"]["idObjetivo"]
         tag = f"{emisor}#{id}"
         return tag
+
+    def helper_username():
+        return storage.get_username(receptor_mac, agenda) or receptor_ip
 
 
     chat.iniciar_receptor()

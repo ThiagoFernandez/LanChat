@@ -177,6 +177,7 @@ def validate_string_v2(text):
             return string
 
 
+
 def obtener_mi_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
