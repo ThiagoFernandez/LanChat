@@ -95,12 +95,10 @@ def mostrar_hosts(root, dispositivos):
 
 def mostrar_chat(root, receptor_ip, receptor_mac):
     agenda = storage.load()
-    root.grid_rowconfigure(0, weight=1)
-    root.grid_rowconfigure(1, weight=1)
     frame = tk.Frame(root)
-    frame2 = tk.Frame(root)
-    frame2.grid(row=0)
-    frame.grid(row=1)
+    header = tk.Frame(root)
+    header.pack(side="top", fill="x")
+    frame.pack(fill="both", expand=True)
 
     def on_clickl(event):
         tag = helper_menu(event)
@@ -151,11 +149,11 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         storage.set_username(receptor_mac, username, agenda)
 
     historial = tk.Text(frame, state="disabled")
-    historial.pack()
+    historial.pack(fill="both", expand=True)
     historial.bind("<Button-1>", on_clickl)
     historial.bind("<Button-3>", on_clickr)
     entrada = tk.Entry(frame)
-    entrada.pack()
+    entrada.pack(fill="x")
 
     def escribir(linea, tag):
         historial.config(state="normal")
@@ -177,8 +175,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         escribir(f"Yo: {texto}", tag)
         entrada.delete(0, "end")
 
-    boton2 = tk.Button(frame2, text="Agendar/Rename", command=agendar)
-    boton2.pack(side="right")
+    tk.Button(header, text="Agendar/Rename", command=agendar).pack(side="right")
     boton = tk.Button(frame, text="Enviar/Send", command=on_enviar)
     boton.pack()
     entrada.bind("<Return>", lambda e: on_enviar())
