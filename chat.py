@@ -2,6 +2,7 @@ import json
 import queue
 import socket
 import threading
+import storage
 from json.decoder import JSONDecodeError
 
 PUERTO = 40000  # rango registrado: 1024 - 49151
@@ -11,7 +12,7 @@ sock.bind(("0.0.0.0", PUERTO))  # 0.0.0.0 = todas las interfaces
 
 cola = queue.Queue()
 
-contador = 0
+contador = storage.load_contador()
 
 def create_msg(
     emisor, txt=None, tipo="msg", idObjetivo = None
@@ -19,6 +20,7 @@ def create_msg(
 
     global contador
     contador+=1
+    storage.save_contador(contador)
 
     dic = {
         "tipo": tipo,

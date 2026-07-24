@@ -130,7 +130,12 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         newMsg = simpledialog.askstring("Editar", "Nuevo texto:")
         if not newMsg:
             return
-        linea = f"{newMsg}"
+        time = "Unreachable"
+        emisor, id_str = tag.split("#")
+        id = int(id_str)
+        idx = storage.get_pos(chat_storage, emisor, id)
+        time = chat_storage[idx]["time"] if idx is not None else time
+        linea = formato(time, newMsg)
         tupla = editar_local(tag, linea)
 
         if tupla:
@@ -144,8 +149,10 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
 
     def self_delete(tag):
         borrar_local(tag)
-        emisor, id, _ = tag.split()
+        emisor, id_str = tag.split("#")
+        id = int(id_str)
         storage.delete_msg(chat_storage, emisor, id)
+        storage.save_chat(receptor_mac, chat_storage)
 
     def all_delete(tag):
         rt = borrar_local(tag)
@@ -154,8 +161,10 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
             dic = chat.create_msg(ip, tipo="delete", idObjetivo=id)
             j = chat.encode_dic(dic)
             chat.send_msg(j, receptor_ip)
-            emisor, id, _ = tag.split()
+            emisor, id_str = tag.split("#")
+            id = int(id_str)
             storage.delete_msg(chat_storage, emisor, id)
+            storage.save_chat(receptor_mac, chat_storage)
 
     def agendar():
         username = simpledialog.askstring("Agendar", "Nuevo contacto:", initialvalue=storage.get_username(receptor_mac, agenda) or "")
@@ -169,6 +178,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     historial.pack(fill="both", expand=True)
     historial.bind("<Button-1>", on_clickl)
     historial.bind("<Button-3>", on_clickr)
+
     entrada = tk.Entry(frame)
     entrada.pack(fill="x")
 
@@ -185,13 +195,12 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         dic = chat.create_msg(
             ip, texto
         )
-
+        time = datetime.now().strftime("%H:%M:%S")
         j = chat.encode_dic(dic)
         chat.send_msg(j, receptor_ip)
-        tag = (f"{ip}#{dic["id"]}", "mine")
-        escribir(texto, tag)
+        pintar(ip, dic["id"], formato(time, texto))
         entrada.delete(0, "end")
-        storage.add_msg(chat_storage, ip, dic["id"], texto, datetime.now().strftime("%H:%M:%S"))
+        storage.add_msg(chat_storage, ip, dic["id"], texto, time)
         storage.save_chat(receptor_mac, chat_storage)
 
 
@@ -204,27 +213,29 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
         msg = dic["content"]["txt"]
         id = dic["id"]
+        time = datetime.now().strftime("%H:%M:%S")
 
-        tag = f"{emisor}#{id}", "others"
-        escribir(msg, tag)
-        storage.add_msg(chat_storage, emisor, id, msg, datetime.now().strftime("%H:%M:%S"))
+        pintar(emisor, id, formato(time, msg))
+        storage.add_msg(chat_storage, emisor, id, msg, time)
         storage.save_chat(receptor_mac, chat_storage)
 
     def delete_msg(dic): #opt 2 de lo q llega
         tag = get_tag_opt_2_3(dic)
         borrar_local(tag)
         emisor = dic["emisor"]
-        id = dic["id"]
+        id = dic["content"]["idObjetivo"]
         storage.delete_msg(chat_storage,emisor,id)
         storage.save_chat(receptor_mac, chat_storage)
 
     def edit_msg(dic): #opt 3 de lo q llega
         tag = get_tag_opt_2_3(dic)
         newMsg = dic["content"]["txt"]
-        linea = newMsg
-        editar_local(tag, linea)
         emisor = dic["emisor"]
-        id = dic["id"]
+        id = dic["content"]["idObjetivo"]
+        idx = storage.get_pos(chat_storage, emisor, id)
+        time = chat_storage[idx]["time"] if idx is not None else "Unreachable"
+        linea = formato(time, newMsg)
+        editar_local(tag, linea)
         storage.edit_msg(chat_storage,emisor,id,newMsg)
         storage.save_chat(receptor_mac, chat_storage)
 
@@ -287,9 +298,23 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     def helper_username():
         return storage.get_username(receptor_mac, agenda) or receptor_ip
 
+    def pintar(emisor, id, txt):
+        alineacion = "mine" if emisor == ip else "others"
+        tag= (f"{emisor}#{id}", alineacion)
+        escribir(txt, tag)
+
+    def msg_recovery(chat_storage):
+        for msg in chat_storage:
+            pintar(msg["emisor"], msg["id"], formato(msg["time"], msg["txt"]))
+
+    def formato(time, txt):
+        return f"[{time}] --- {txt}"
+
     label = tk.Label(header, text=helper_username())
     label.pack(side="right")
     label.bind("<Button-1>", on_clickRename)
 
+
+    msg_recovery(chat_storage)
     chat.iniciar_receptor()
     root.after(100, drenar_cola)

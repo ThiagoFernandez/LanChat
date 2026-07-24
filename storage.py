@@ -85,3 +85,16 @@ def get_pos(chat, emisor, id):
     for i, c in enumerate(chat):
         if c["emisor"] == emisor and c["id"] == id:
             return i
+
+def load_contador():
+    try:
+        with open("cont.txt", "r", encoding="UTF-8") as f:
+            cont = int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        cont = 0
+
+    return cont
+
+def save_contador(cont):
+    with open("cont.txt", "w", encoding="UTF-8") as f:
+        f.write(str(cont))
