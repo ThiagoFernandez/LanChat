@@ -101,6 +101,11 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     header.pack(side="top", fill="x")
     frame.pack(fill="both", expand=True)
 
+    def notificar(texto):
+        ventana = tk.Toplevel(root) # gracias a esto no me bloquea toda la app
+        tk.Label(ventana, text=texto).pack(padx=20, pady=10)
+        ventana.after(3000, ventana.destroy)
+
     def on_clickl(event):
         tag = helper_menu(event)
         if not tag:
@@ -123,7 +128,12 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     def on_clickRename(event):
         menu = tk.Menu(root, tearoff=0)
         menu.add_command(label="Agendar/Rename", command=agendar)
-        menu.tk_popup(event.x_root, event.y_root)
+        menu.add_command(label="Agendar/Rename", command=agendar)
+        activo = storage.get_notification(receptor_mac, agenda) != False
+        menu.add_command(label=f"Notificaciones: {'ON' if activo else 'OFF'}",
+                         command=lambda: storage.toggle_notification(receptor_mac, agenda))
+
+        menu.tk_popup(event.x_root, event.y_root) # esto va al final porque sino muestro algo incompleto
 
 
     def all_edit(tag):
@@ -214,10 +224,12 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         msg = dic["content"]["txt"]
         id = dic["id"]
         time = datetime.now().strftime("%H:%M:%S")
-
         pintar(emisor, id, formato(time, msg))
         storage.add_msg(chat_storage, emisor, id, msg, time)
         storage.save_chat(receptor_mac, chat_storage)
+
+        if storage.get_notification(receptor_mac, agenda) != False and root.focus_displayof() is None:
+            notificar(msg)
 
     def delete_msg(dic): #opt 2 de lo q llega
         tag = get_tag_opt_2_3(dic)

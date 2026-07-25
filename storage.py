@@ -6,8 +6,12 @@ def load():
             agenda = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         agenda = create_agenda()
-        save(agenda)
 
+
+    for mac, v in agenda.items():
+        if isinstance(v, str):          # formato viejardo
+            agenda[mac] = {"username": v, "notif": True}
+    save(agenda)
     return agenda
 
 
@@ -17,14 +21,31 @@ def save(agenda):
 
 def get_username(mac, agenda):
     normalized_mac = normalizar_mac(mac)
-    username = agenda.get(normalized_mac)# la gui checkea que no sea None
-    return username # aca podria dejar la validacion de si no tiene nombre, crearle uno(no obligo porque talvez no quiere agendarlo)
-    # la validacion podria estar en esta llamada o en gui
+    dictt = agenda.get(normalized_mac)# la gui checkea que no sea None
+    username = dictt["username"] if dictt is not None else None
+    return username
 
 def set_username(mac, username, agenda):
-    normalized_mac = normalizar_mac(mac)
-    agenda[normalized_mac] = username # aca no valido ni que eexista la mac ni que el username contenga texto
+    entry = _get_entry(mac, agenda)   # referencia adentro de agenda
+    entry["username"] = username
     save(agenda)
+
+def toggle_notification( mac, agenda):
+    entry = _get_entry(mac, agenda)   # referencia adentro de agenda
+    entry["notif"] = not entry["notif"]
+    save(agenda)
+
+def get_notification( mac, agenda):
+    normalized_mac=normalizar_mac(mac)
+    dictt = agenda.get(normalized_mac)
+    notif = dictt["notif"] if dictt is not None else None
+    return notif
+
+def _get_entry(mac, agenda):
+    mac = normalizar_mac(mac)
+    if mac not in agenda:
+        agenda[mac] = {"username": None, "notif": True}
+    return agenda[mac]
 
 def create_agenda():
     agenda = {
