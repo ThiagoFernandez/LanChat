@@ -1,5 +1,18 @@
 {
-    "d0:37:45:7d:7a:7b": "Falcu",
-    "9c:6b:00:9a:d1:68": "thiago",
-    "44:ad:b1:f8:e2:3d": "router"
+    "d0:37:45:7d:7a:7b": {
+        "username": "Falcu",
+        "notif": true
+    },
+    "9c:6b:00:9a:d1:68": {
+        "username": "thiago",
+        "notif": true
+    },
+    "44:ad:b1:f8:e2:3d": {
+        "username": "router",
+        "notif": true
+    },
+    "08:bf:b8:1b:49:83": {
+        "username": "Facu",
+        "notif": true
+    }
 }
