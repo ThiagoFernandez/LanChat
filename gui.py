@@ -9,7 +9,10 @@ import scanner
 import storage
 import crypto
 
+MAX_INTENTOS = 5
+TIMEOUT_MS = 1500
 ip = auxiliar.obtener_mi_ip()
+
 
 
 def iniciar_app():
@@ -95,6 +98,8 @@ def mostrar_hosts(root, dispositivos):
 
 
 def mostrar_chat(root, receptor_ip, receptor_mac):
+    pendientes = []   # FIFO de cifrados que llegaron sin clave
+    intentos = 0
     fernet_peer = None   # el Fernet de este peer; None hasta que el hs este finished
     paquete = crypto.envolver_handshake(crypto.my_public, "hs_init")
     chat.send_msg(paquete, receptor_ip)
@@ -104,6 +109,18 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     header = tk.Frame(root)
     header.pack(side="top", fill="x")
     frame.pack(fill="both", expand=True)
+
+    def reintentar_handshake():
+        nonlocal intentos
+        if fernet_peer is not None:
+            return
+        if intentos >= MAX_INTENTOS:
+            boton.config(text="Sin conexión segura")
+            messagebox.showwarning("Sin conexión segura", "No se pudo establecer una conversación cifrada.")
+            return
+        chat.send_msg(crypto.envolver_handshake(crypto.my_public, "hs_init"), receptor_ip)
+        intentos += 1
+        root.after(TIMEOUT_MS, reintentar_handshake)
 
     def notificar(texto):
         ventana = tk.Toplevel(root) # gracias a esto no me bloquea toda la app
@@ -254,34 +271,46 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         storage.edit_msg(chat_storage,emisor,id,newMsg)
         storage.save_chat(receptor_mac, chat_storage)
 
+    def procesar_cifrado(dic):
+        if chat.validate_dic(dic) == 1:
+            match dic["tipo"]:
+                case "msg":    show_msg(dic)
+                case "delete": delete_msg(dic)
+                case "edit":   edit_msg(dic)
+
+    def drenar_pendientes():
+        for raw in pendientes:
+            tipo, payload = crypto.desenvolver(raw, fernet_peer)
+            if tipo == "cifrado":
+                procesar_cifrado(payload)
+        pendientes.clear()
 
     def drenar_cola():
         nonlocal fernet_peer
         while True:
             try:
                 raw, addr = chat.cola.get_nowait()
-                tipo, payload = crypto.desenvolver(raw, fernet_peer)
+
             except queue.Empty:
                 break
 
+            if fernet_peer is None and crypto.leer_tipo(raw) == "cifrado":
+                pendientes.append(raw)      # todavi no puedo descifrarlo → lo guardo
+                continue
+
+            tipo, payload = crypto.desenvolver(raw, fernet_peer)
             match tipo:
                 case "hs_init":
                     fernet_peer = crypto.derivar_fernet(payload)
                     chat.send_msg(crypto.envolver_handshake(crypto.my_public, "hs_reply"), addr[0])
                     boton.config(state="normal", text="Enviar/Send")
+                    drenar_pendientes()
                 case "hs_reply":
                     fernet_peer = crypto.derivar_fernet(payload)
                     boton.config(state="normal", text="Enviar/Send")
+                    drenar_pendientes()
                 case "cifrado":
-                    dic = payload
-                    if chat.validate_dic(dic) == 1:
-                        match dic["tipo"]:
-                            case "msg":
-                                show_msg(dic)
-                            case "delete":
-                                delete_msg(dic)
-                            case "edit":
-                                edit_msg(dic)
+                    procesar_cifrado(payload)
                 case _:
                     pass
         root.after(100, drenar_cola)
@@ -348,3 +377,4 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     msg_recovery(chat_storage)
     chat.iniciar_receptor()
     root.after(100, drenar_cola)
+    root.after(TIMEOUT_MS, reintentar_handshake)

@@ -11,6 +11,11 @@ import json
 my_private = X25519PrivateKey.generate()
 my_public = my_private.public_key()
 
+def leer_tipo(raw):
+    try:
+        return json.loads(raw).get("tipo")
+    except (json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+        return None
 
 def envolver_handshake(public_key, tipo): # tipo seria hs_init o hs_reply
     # 1. clave pública -> bytes crudos
