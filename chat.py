@@ -84,16 +84,10 @@ def send_msg(msg, receptor):
 def loop_red():
     while True:
         try:
-            data, addr = sock.recvfrom(
-                1024
-            )  # estos son 1024 bytes lo cual me puede dejar corto en un futuro
+            data, addr = sock.recvfrom(1024)
         except OSError:
             break
-        dic = decode_dic(data)
-
-        result = validate_dic(dic)
-        if result == 1:
-            cola.put((dic, addr))  # tupla mejor que lista para un registro fijo
+        cola.put((data, addr))
 
 
 def cerrar():

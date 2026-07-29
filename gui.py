@@ -7,6 +7,7 @@ import auxiliar
 import chat
 import scanner
 import storage
+import crypto
 
 ip = auxiliar.obtener_mi_ip()
 
@@ -94,6 +95,9 @@ def mostrar_hosts(root, dispositivos):
 
 
 def mostrar_chat(root, receptor_ip, receptor_mac):
+    fernet_peer = None   # el Fernet de este peer; None hasta que el hs este finished
+    paquete = crypto.envolver_handshake(crypto.my_public, "hs_init")
+    chat.send_msg(paquete, receptor_ip)
     agenda = storage.load()
     chat_storage = storage.load_chat(receptor_mac)
     frame = tk.Frame(root)
@@ -128,7 +132,6 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     def on_clickRename(event):
         menu = tk.Menu(root, tearoff=0)
         menu.add_command(label="Agendar/Rename", command=agendar)
-        menu.add_command(label="Agendar/Rename", command=agendar)
         activo = storage.get_notification(receptor_mac, agenda) != False
         menu.add_command(label=f"Notificaciones: {'ON' if activo else 'OFF'}",
                          command=lambda: storage.toggle_notification(receptor_mac, agenda))
@@ -151,8 +154,8 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         if tupla:
             id = int(tag.split("#")[1])
             dic = chat.create_msg(ip, txt=newMsg, tipo="edit", idObjetivo=id)
-            j = chat.encode_dic(dic)
-            chat.send_msg(j, receptor_ip)
+            paquete = crypto.envolver(dic, fernet_peer)
+            chat.send_msg(paquete, receptor_ip)
 
             storage.edit_msg(chat_storage, ip, id, newMsg)
             storage.save_chat(receptor_mac, chat_storage)
@@ -169,8 +172,8 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         if rt:
             id = int(tag.split("#")[1])
             dic = chat.create_msg(ip, tipo="delete", idObjetivo=id)
-            j = chat.encode_dic(dic)
-            chat.send_msg(j, receptor_ip)
+            paquete = crypto.envolver(dic, fernet_peer)
+            chat.send_msg(paquete, receptor_ip)
             emisor, id_str = tag.split("#")
             id = int(id_str)
             storage.delete_msg(chat_storage, emisor, id)
@@ -206,8 +209,8 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
             ip, texto
         )
         time = datetime.now().strftime("%H:%M:%S")
-        j = chat.encode_dic(dic)
-        chat.send_msg(j, receptor_ip)
+        paquete = crypto.envolver(dic, fernet_peer)
+        chat.send_msg(paquete, receptor_ip)
         pintar(ip, dic["id"], formato(time, texto))
         entrada.delete(0, "end")
         storage.add_msg(chat_storage, ip, dic["id"], texto, time)
@@ -215,7 +218,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
 
 
 
-    boton = tk.Button(frame, text="Enviar/Send", command=on_enviar)
+    boton = tk.Button(frame, text="Conectando...", command=on_enviar, state="disabled")
     boton.pack()
     entrada.bind("<Return>", lambda e: on_enviar())
 
@@ -253,19 +256,34 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
 
 
     def drenar_cola():
+        nonlocal fernet_peer
         while True:
             try:
-                dic, addr = chat.cola.get_nowait()
+                raw, addr = chat.cola.get_nowait()
+                tipo, payload = crypto.desenvolver(raw, fernet_peer)
             except queue.Empty:
                 break
 
-            match dic["tipo"]:
-                case "msg":
-                    show_msg(dic)
-                case "delete":
-                    delete_msg(dic)
-                case "edit":
-                    edit_msg(dic)
+            match tipo:
+                case "hs_init":
+                    fernet_peer = crypto.derivar_fernet(payload)
+                    chat.send_msg(crypto.envolver_handshake(crypto.my_public, "hs_reply"), addr[0])
+                    boton.config(state="normal", text="Enviar/Send")
+                case "hs_reply":
+                    fernet_peer = crypto.derivar_fernet(payload)
+                    boton.config(state="normal", text="Enviar/Send")
+                case "cifrado":
+                    dic = payload
+                    if chat.validate_dic(dic) == 1:
+                        match dic["tipo"]:
+                            case "msg":
+                                show_msg(dic)
+                            case "delete":
+                                delete_msg(dic)
+                            case "edit":
+                                edit_msg(dic)
+                case _:
+                    pass
         root.after(100, drenar_cola)
 
     def borrar_local(tag):
