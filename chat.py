@@ -7,12 +7,17 @@ from json.decoder import JSONDecodeError
 
 PUERTO = 40000  # rango registrado: 1024 - 49151
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4 + UDP
-sock.bind(("0.0.0.0", PUERTO))  # 0.0.0.0 = todas las interfaces
 
+sock = None
 cola = queue.Queue()
 
-contador = storage.load_contador()
+contador = 0
+
+def iniciar_socket():
+    global sock, contador
+    contador = storage.load_contador()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # IPv4 + UDP
+    sock.bind(("0.0.0.0", PUERTO))  # 0.0.0.0 = todas las interfaces
 
 def create_msg(
     emisor, txt=None, tipo="msg", idObjetivo = None

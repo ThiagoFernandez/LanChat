@@ -26,6 +26,7 @@ def iniciar_app():
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
+    chat.iniciar_socket()
     mostrar_red(root)
     root.mainloop()
 
