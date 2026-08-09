@@ -12,12 +12,13 @@ import storage
 
 MAX_INTENTOS = 5
 TIMEOUT_MS = 1500
-ip = auxiliar.obtener_mi_ip()
+my_ip = auxiliar.obtener_mi_ip()
 conversaciones = {}   # {mac: conv}
 ip_a_mac = {}         # {ip: mac}
 conv_activa = None    # la que se muestra
 root = None      # se setea en iniciar_app: global root; root = tk.Tk()
 agenda = None    # se carga una vez: global agenda; agenda = storage.load()
+esperando_mac = {} # {ip:[raw, ...]}
 
 def resolver_mac(ip):
     return ip_a_mac.get(ip)
@@ -41,6 +42,23 @@ def obtener_conv(mac, ip):
         conversaciones[mac] = conv
 
         return conv
+
+def procesar_paquete(conv, raw, ip_origen):
+    if conv["fernet"] is None and crypto.leer_tipo(raw) == "cifrado":
+        conv["pendientes"].append(raw)      # todavi no puedo descifrarlo → lo guardo
+        return
+
+    tipo, payload = crypto.desenvolver(raw, conv["fernet"])
+    match tipo:
+        case "hs_init":
+            chat.send_msg(crypto.envolver_handshake(crypto.my_public, "hs_reply"),ip_origen)
+            helper_completar_handshake(conv, payload)
+        case "hs_reply":
+            helper_completar_handshake(conv, payload)
+        case "cifrado":
+            procesar_cifrado(conv, payload)
+        case _:
+            pass
 
 def iniciar_app():
     global root
@@ -111,7 +129,7 @@ def mostrar_hosts(root, dispositivos):
     idx = None
 
     for cont, d in enumerate(dispositivos):
-        if d["ip"] == ip:
+        if d["ip"] == my_ip:
             idx= cont
         lista.insert("end", f"{d['ip']} - {d['mac']} - {d['hostname']}")
         ip_a_mac[d["ip"]] = d['mac']
@@ -149,15 +167,18 @@ def on_enviar(conv):
     texto = conv["entrada"].get().strip()
     if not texto:
         return
+    if not conv["fernet"]:
+        notificar("NO SECURE CHANNEL YET")
+        return
     dic = chat.create_msg(
-        ip, texto
+        my_ip, texto
     )
     time = datetime.now().strftime("%H:%M:%S")
     paquete = crypto.envolver(dic, conv["fernet"])
     chat.send_msg(paquete, conv["ip"])
-    pintar(conv, ip, dic["id"], formato(time, texto))
+    pintar(conv, my_ip, dic["id"], formato(time, texto))
     conv["entrada"].delete(0, "end")
-    storage.add_msg(conv["chat_storage"], ip, dic["id"], texto, time)
+    storage.add_msg(conv["chat_storage"], my_ip, dic["id"], texto, time)
     storage.save_chat(conv["mac"], conv["chat_storage"])
 
 
@@ -168,12 +189,17 @@ def show_msg(conv, dic): #opt 1 de lo q llega
     msg = dic["content"]["txt"]
     id = dic["id"]
     time = datetime.now().strftime("%H:%M:%S")
-    pintar(conv, emisor, id, formato(time, msg))
     storage.add_msg(conv["chat_storage"], emisor, id, msg, time)
     storage.save_chat(conv["mac"], conv["chat_storage"])
 
     if storage.get_notification(conv["mac"], agenda) != False and root.focus_displayof() is None:
         notificar(msg)
+
+    if conv.get("historial"):
+        pintar(conv, emisor, id, formato(time, msg))
+    else:
+        conv["no_leidos"] += 1
+
 
 def delete_msg(conv, dic): #opt 2 de lo q llega
     tag = get_tag_opt_2_3(dic)
@@ -226,26 +252,16 @@ def drenar_cola():
 
         mac = resolver_mac(addr[0])
         if not mac:
-            continue
-        conv = conversaciones.get(mac)
-        if not conv:
-            continue
-
-        if conv["fernet"] is None and crypto.leer_tipo(raw) == "cifrado":
-            conv["pendientes"].append(raw)      # todavi no puedo descifrarlo → lo guardo
+            if addr[0] in esperando_mac:
+                esperando_mac[addr[0]].append(raw)
+            else:
+                esperando_mac[addr[0]] = [raw]
             continue
 
-        tipo, payload = crypto.desenvolver(raw, conv["fernet"])
-        match tipo:
-            case "hs_init":
-                chat.send_msg(crypto.envolver_handshake(crypto.my_public, "hs_reply"), addr[0])
-                helper_completar_handshake(conv, payload)
-            case "hs_reply":
-                helper_completar_handshake(conv, payload)
-            case "cifrado":
-                procesar_cifrado(conv, payload)
-            case _:
-                pass
+        conv = obtener_conv(mac, addr[0])
+
+        procesar_paquete(conv, raw, addr[0])
+
     root.after(100, drenar_cola)
 
 def borrar_local(conv, tag):
@@ -284,7 +300,7 @@ def helper_username(conv):
     return storage.get_username(conv["mac"], agenda) or conv["ip"]
 
 def pintar(conv, emisor, id, txt):
-    alineacion = "mine" if emisor == ip else "others"
+    alineacion = "mine" if emisor == my_ip else "others"
     tag= (f"{emisor}#{id}", alineacion)
     escribir(conv, txt, tag)
 
@@ -337,7 +353,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
             return
         menu = tk.Menu(root, tearoff=0)
         menu.add_command(label="Borrar para mi", command=lambda: self_delete(tag))
-        if tag.split("#")[0] == ip:
+        if tag.split("#")[0] == my_ip:
             menu.add_command(label="Borrar para ambos", command=lambda: all_delete(tag))
         menu.tk_popup(event.x_root, event.y_root)
 
@@ -346,7 +362,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         if not tag:
             return
         menu = tk.Menu(root, tearoff=0)
-        if tag.split("#")[0]== ip:
+        if tag.split("#")[0]== my_ip:
             menu.add_command(label="Editar mensaje", command=lambda: all_edit(tag))
         menu.tk_popup(event.x_root, event.y_root)
 
@@ -374,11 +390,11 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
 
         if tupla:
             id = int(tag.split("#")[1])
-            dic = chat.create_msg(ip, txt=newMsg, tipo="edit", idObjetivo=id)
+            dic = chat.create_msg(my_ip, txt=newMsg, tipo="edit", idObjetivo=id)
             paquete = crypto.envolver(dic, conv["fernet"])
             chat.send_msg(paquete, conv["ip"])
 
-            storage.edit_msg(conv["chat_storage"], ip, id, newMsg)
+            storage.edit_msg(conv["chat_storage"], my_ip, id, newMsg)
             storage.save_chat(conv["mac"], conv["chat_storage"])
 
     def self_delete(tag):
@@ -392,7 +408,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
         rt = borrar_local(conv, tag)
         if rt:
             id = int(tag.split("#")[1])
-            dic = chat.create_msg(ip, tipo="delete", idObjetivo=id)
+            dic = chat.create_msg(my_ip, tipo="delete", idObjetivo=id)
             paquete = crypto.envolver(dic, conv["fernet"])
             chat.send_msg(paquete, conv["ip"])
             emisor, id_str = tag.split("#")
@@ -412,19 +428,13 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     entrada = tk.Entry(frame)
     entrada.pack(fill="x")
 
-    boton = tk.Button(frame, text="Conectando...", command=lambda : on_enviar(conv), state="disabled")
+    boton = tk.Button(frame, text="Conectando..." if not conv["fernet"] else "Send/Enviar", command=lambda : on_enviar(conv), state="disabled" if not conv["fernet"] else "normal")
     boton.pack()
     entrada.bind("<Return>", lambda e: on_enviar(conv))
-
-
-
-
-
 
     def msg_recovery(chat_storage):
         for msg in chat_storage:
             pintar(conv, msg["emisor"], msg["id"], formato(msg["time"], msg["txt"]))
-
 
 
     label = tk.Label(header, text=helper_username(conv))
