@@ -28,13 +28,34 @@ dos máquinas, y nadie que capture el tráfico puede leerlos.
 - **Permisos de administrador / root** — scapy necesita acceso crudo a la interfaz de red
 - **Windows:** [Npcap](https://npcap.com/) instalado *(marcá "WinPcap API-compatible mode")*.
   Sin esto scapy no puede enviar los ARP.
-- **Linux:** `libpcap`, y correr con `sudo`
+- **Linux:** `libpcap`, y correr con `sudo` (ver la nota de abajo)
 - Las dos máquinas en la **misma red local**, con el **puerto UDP 40000** abierto en el firewall
+
+### Nota para Debian / Ubuntu / Mint
+
+`tkinter` **no viene con el Python del sistema** y `pip` no lo resuelve:
+
+```bash
+sudo apt install python3-tk
+```
+
+Y como scapy necesita root, ojo con el entorno virtual: `sudo` resetea el `PATH` y termina
+usando el Python del sistema, sin las dependencias. Hay que invocarlo por ruta:
+
+```bash
+sudo .venv/bin/python main.py
+```
+
+Los archivos de datos quedan con dueño `root` al correr así. Si después se ejecuta sin sudo,
+hay que devolverlos: `sudo chown $USER:$USER *.json cont.txt`.
+
+La resolución de hostname por NetBIOS no funciona contra máquinas Linux sin Samba: aparecen
+como `N/A`. El DNS inverso sigue andando y el chat no depende del hostname.
 
 ## Instalación
 
 ```bash
-git clone https://github.com/ThiagoFernandez/LanChat.git
+git clone https://github.com/ThiagoFernandez/LanChat
 cd LanChat
 python -m venv .venv
 ```
