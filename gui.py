@@ -20,6 +20,11 @@ root = None      # se setea en iniciar_app: global root; root = tk.Tk()
 agenda = None    # se carga una vez: global agenda; agenda = storage.load()
 barra = None     # se carga una vez con los contactos y despues se va refresheando cada vez que se modifica
 esperando_mac = {} # {ip:[raw, ...]}
+lista_contactos = None
+
+def volver_a_red():
+    ocultar_paneles()
+    mostrar_red(root)
 
 def resolver_mac(ip):
     return ip_a_mac.get(ip)
@@ -32,7 +37,7 @@ def resolver_ip(mac):
 
 def obtener_conv(mac, ip):
     if mac in conversaciones:
-        if conversaciones[mac]["ip"] != ip:
+        if ip is not None and conversaciones[mac]["ip"] != ip:
             conversaciones[mac]["ip"] = ip # x si cambio la ip btw
         return conversaciones[mac]
     else:
@@ -96,11 +101,23 @@ def iniciar_app():
 
 def construir_barra(root):
     global barra
+    global lista_contactos
+
     if barra is not None:
         return
+
     barra = tk.Frame(root, width=180, bg="lightgray")
     barra.pack(side="left", fill="y")
     barra.pack_propagate(False) # esto evita q la barra se achique al sizee de sus hijos(los contactos)
+
+    lista_contactos = tk.Frame(barra, bg="lightgray")
+    lista_contactos.pack(fill="both", expand=True)
+
+    tk.Button(
+        barra,
+        text="Buscar dispositivos",
+        command=volver_a_red
+    ).pack(side="bottom", fill="x")
 
 def abrir_contacto(mac):
     ip = resolver_ip(mac)
@@ -108,10 +125,12 @@ def abrir_contacto(mac):
     mostrar_conv(conv)
 
 def refrescar_barra():
-    snapshot = barra.winfo_children()
+    snapshot = lista_contactos.winfo_children()
 
     macs = sorted(
-        agenda, key=lambda mac: storage.get_ultimo(mac, agenda), reverse=True
+        agenda,
+        key=lambda mac: storage.get_ultimo(mac, agenda),
+        reverse=True
     )
 
     for children in snapshot:
@@ -127,7 +146,7 @@ def refrescar_barra():
             no_leidos = conv["no_leidos"]
             txt = f"{txt} --- [{no_leidos}]"
 
-        lbl = tk.Label(barra, text=txt, anchor="w", bg="lightgray")
+        lbl = tk.Label(lista_contactos, text=txt, anchor="w", bg="lightgray")
 
         if resolver_ip(mac) is None:
             lbl.config(fg="grey")
@@ -135,7 +154,19 @@ def refrescar_barra():
         lbl.bind("<Button-1>", lambda e, m=mac: abrir_contacto(m))
         lbl.pack(fill="x", pady=5)
 
+def ocultar_paneles():
+    global conv_activa
 
+    snapshot = root.winfo_children()
+
+    for children in snapshot:
+        if children is barra:
+            continue
+        if children.winfo_manager() != "pack":
+            continue
+        children.pack_forget()
+
+    conv_activa = None
 
 def mostrar_red(root):
     frame = tk.Frame(root)
@@ -244,25 +275,30 @@ def on_enviar(conv):
 
 
 def show_msg(conv, dic): #opt 1 de lo q llega
-    emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
+    emisor = dic["emisor"]
     msg = dic["content"]["txt"]
     id = dic["id"]
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
     iso = now.isoformat()
+
     storage.add_msg(conv["chat_storage"], emisor, id, msg, time)
     storage.save_chat(conv["mac"], conv["chat_storage"])
     storage.set_ultimo(conv["mac"], iso, agenda)
 
-    if storage.get_notification(conv["mac"], agenda) != False and root.focus_displayof() is None:
+    if storage.get_notification(conv["mac"], agenda) != False and (
+        root.focus_displayof() is None or conv is not conv_activa
+    ):
         notificar(msg)
 
     if conv.get("historial"):
         pintar(conv, emisor, id, formato(time, msg))
-    else:
+
+    if conv is not conv_activa:
         conv["no_leidos"] += 1
 
     refrescar_barra()
+
 
 
 def delete_msg(conv, dic): #opt 2 de lo q llega
@@ -413,13 +449,7 @@ def mostrar_conv(conv):
     if not conv.get("contenedor"):
         construir_chat(conv)
 
-    snapshot = root.winfo_children()
-    for children in snapshot:
-        if children is barra:
-            continue
-        if children.winfo_manager() != "pack":
-            continue
-        children.pack_forget()
+    ocultar_paneles()
 
     conv["contenedor"].pack(fill="both", expand=True)
     conv_activa = conv
