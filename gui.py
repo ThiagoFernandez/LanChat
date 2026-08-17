@@ -256,6 +256,7 @@ def drenar_cola():
                 esperando_mac[addr[0]].append(raw)
             else:
                 esperando_mac[addr[0]] = [raw]
+                threading.Thread(target=worker_arp, args=(addr[0], raw), daemon=True).start()
             continue
 
         conv = obtener_conv(mac, addr[0])
@@ -263,6 +264,26 @@ def drenar_cola():
         procesar_paquete(conv, raw, addr[0])
 
     root.after(100, drenar_cola)
+
+def worker_arp(ip):
+    resultado = scanner.single_arp(ip)              # lo único que bloquea
+    root.after(0, lambda: resolver_pendientes(ip, resultado))
+
+
+def resolver_pendientes(ip, resultado):
+    guardados = esperando_mac.pop(ip, [])           # 1. saca la lista Y borra la clave
+
+    if not resultado:                               # 2. el ARP no resolvió
+        return
+
+    mac = resultado[0]["mac"]                       # 3. ahora sí es seguro indexar
+    ip_a_mac[ip] = mac
+    conv = obtener_conv(mac, ip)
+
+    for raw in guardados:                           # 4. drena TODO lo acumulado
+        procesar_paquete(conv, raw, ip)
+
+
 
 def borrar_local(conv, tag):
     tupla = conv["historial"].tag_ranges(tag)

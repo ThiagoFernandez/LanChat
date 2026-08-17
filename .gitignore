@@ -1,0 +1,16 @@
+# --- datos de runtime: NO son código, cambian en cada ejecución ---
+agenda.json          # alias + MACs reales de los equipos de la red
+cont.txt             # contador de IDs de mensaje persistido
+*-*-*-*-*-*.json     # historiales de chat (nombrados por MAC)
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- editores / SO ---
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

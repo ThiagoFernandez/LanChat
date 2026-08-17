@@ -110,6 +110,17 @@ def ver_resultados(resultados):
                 f"{idx:<4} {d['ip']:<{anchos['ip']}} {d['mac']:<{anchos['mac']}} {d['hostname']:<{anchos['hostname']}}"
             )
 
+def single_arp(ip):
+    paquete = get_paquete(ip)
+    si_rta, _ = enviar_paquete(paquete)
+    dispositivos = []
+    for enviado, recibido in si_rta:
+        dispositivos.append(
+            {
+                "mac": recibido[Ether].src
+            }
+        )
+    return dispositivos
 
 def start_scanner(red):
     paquete = get_paquete(red)
