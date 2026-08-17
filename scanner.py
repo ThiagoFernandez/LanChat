@@ -29,7 +29,7 @@ def enviar_paquete(paquete):
 def get_hostname(ip):
     try:
         hostname = socket.gethostbyaddr(ip)[0]
-    except socket.herror:
+    except OSError:
         rt = get_netbios_name(ip)
         if rt is not None:
             hostname = rt
@@ -42,6 +42,8 @@ def get_netbios_name(ip, timeout=2):
     try:
         names = nb.queryIPForName(ip, timeout=timeout)   #por lo q vi, esto va al udp puerto num 137
         return names[0] if names else None
+    except OSError:
+        return None
     finally:
         nb.close()
 
