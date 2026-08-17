@@ -1,0 +1,7 @@
+# LanChat — dependencias de terceros
+# (tkinter, queue, threading, socket, json y base64 son de la stdlib)
+
+scapy>=2.7.0            # ARP: descubrimiento de la red y resolucion puntual
+cryptography>=45.0.0    # X25519 + HKDF-SHA256 + Fernet (el cifrado E2E)
+pysmb>=1.2.11           # provee el paquete nmb: resolucion NetBIOS de hostnames
+colorama>=0.4.6         # colores en la salida por consola del scanner
