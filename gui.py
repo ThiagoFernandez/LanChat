@@ -18,10 +18,17 @@ ip_a_mac = {}         # {ip: mac}
 conv_activa = None    # la que se muestra
 root = None      # se setea en iniciar_app: global root; root = tk.Tk()
 agenda = None    # se carga una vez: global agenda; agenda = storage.load()
+barra = None     # se carga una vez con los contactos y despues se va refresheando cada vez que se modifica
 esperando_mac = {} # {ip:[raw, ...]}
 
 def resolver_mac(ip):
     return ip_a_mac.get(ip)
+
+def resolver_ip(mac):
+    for ip, v in ip_a_mac.items():
+        if v == mac:
+            return ip
+    return None
 
 def obtener_conv(mac, ip):
     if mac in conversaciones:
@@ -36,10 +43,11 @@ def obtener_conv(mac, ip):
             "chat_storage": storage.load_chat(mac),
             "pendientes": [], # FIFO de cifrados que llegaron sin clave
             "intentos": 0,
-            "ultimo": None,
             "no_leidos": 0
         }
         conversaciones[mac] = conv
+
+        storage.register_contact(mac, agenda)
 
         return conv
 
@@ -74,13 +82,59 @@ def iniciar_app():
     root.protocol("WM_DELETE_WINDOW", on_close)
     chat.iniciar_socket()
 
+    agenda = storage.load()
+    construir_barra(root)
+    refrescar_barra()
     mostrar_red(root)
 
     chat.iniciar_receptor()
-    agenda = storage.load()
+
+
     root.after(100, drenar_cola)
 
     root.mainloop()
+
+def construir_barra(root):
+    global barra
+    if barra is not None:
+        return
+    barra = tk.Frame(root, width=180, bg="lightgray")
+    barra.pack(side="left", fill="y")
+    barra.pack_propagate(False) # esto evita q la barra se achique al sizee de sus hijos(los contactos)
+
+def abrir_contacto(mac):
+    ip = resolver_ip(mac)
+    conv = obtener_conv(mac, ip)
+    mostrar_conv(conv)
+
+def refrescar_barra():
+    snapshot = barra.winfo_children()
+
+    macs = sorted(
+        agenda, key=lambda mac: storage.get_ultimo(mac, agenda), reverse=True
+    )
+
+    for children in snapshot:
+        children.destroy()
+
+    for mac in macs:
+        username = storage.get_username(mac, agenda)
+        txt = username if username is not None else mac
+
+        conv = conversaciones.get(mac)
+
+        if conv is not None and conv["no_leidos"] != 0:
+            no_leidos = conv["no_leidos"]
+            txt = f"{txt} --- [{no_leidos}]"
+
+        lbl = tk.Label(barra, text=txt, anchor="w", bg="lightgray")
+
+        if resolver_ip(mac) is None:
+            lbl.config(fg="grey")
+
+        lbl.bind("<Button-1>", lambda e, m=mac: abrir_contacto(m))
+        lbl.pack(fill="x", pady=5)
+
 
 
 def mostrar_red(root):
@@ -98,9 +152,9 @@ def mostrar_red(root):
 
         tk.Label(frame, text=f"Escaneando la red: {red}").pack()
         boton.config(state="disabled")
-        barra = ttk.Progressbar(frame, mode="indeterminate")
-        barra.pack(pady=5)
-        barra.start()
+        progreso = ttk.Progressbar(frame, mode="indeterminate")
+        progreso.pack(pady=5)
+        progreso.start()
         threading.Thread(target=worker, args=(red,), daemon=True).start()
 
 
@@ -134,6 +188,8 @@ def mostrar_hosts(root, dispositivos):
         lista.insert("end", f"{d['ip']} - {d['mac']} - {d['hostname']}")
         ip_a_mac[d["ip"]] = d['mac']
 
+    refrescar_barra()
+
     if idx is not None:
         lista.itemconfig(idx, {"fg": "dark green"}) # podria hacerlo -1 de default y listo pero bueno
 
@@ -146,7 +202,8 @@ def mostrar_hosts(root, dispositivos):
         receptor_ip = dispositivos[idx]["ip"]
         receptor_mac = dispositivos[idx]["mac"]
         frame.destroy()
-        mostrar_chat(root, receptor_ip, receptor_mac)
+        conv = obtener_conv(receptor_mac, receptor_ip)
+        mostrar_conv(conv)
 
     tk.Button(frame, text="Connect", command=conectar).pack(pady=10)
 
@@ -173,24 +230,29 @@ def on_enviar(conv):
     dic = chat.create_msg(
         my_ip, texto
     )
-    time = datetime.now().strftime("%H:%M:%S")
+    now = datetime.now()
+    time = now.strftime("%H:%M:%S")
+    iso = now.isoformat()
     paquete = crypto.envolver(dic, conv["fernet"])
     chat.send_msg(paquete, conv["ip"])
     pintar(conv, my_ip, dic["id"], formato(time, texto))
     conv["entrada"].delete(0, "end")
     storage.add_msg(conv["chat_storage"], my_ip, dic["id"], texto, time)
     storage.save_chat(conv["mac"], conv["chat_storage"])
-
-
+    storage.set_ultimo(conv["mac"], iso, agenda)
+    refrescar_barra()
 
 
 def show_msg(conv, dic): #opt 1 de lo q llega
     emisor = dic["emisor"]  # dsp con addr[0] tendria q validar la identidad
     msg = dic["content"]["txt"]
     id = dic["id"]
-    time = datetime.now().strftime("%H:%M:%S")
+    now = datetime.now()
+    time = now.strftime("%H:%M:%S")
+    iso = now.isoformat()
     storage.add_msg(conv["chat_storage"], emisor, id, msg, time)
     storage.save_chat(conv["mac"], conv["chat_storage"])
+    storage.set_ultimo(conv["mac"], iso, agenda)
 
     if storage.get_notification(conv["mac"], agenda) != False and root.focus_displayof() is None:
         notificar(msg)
@@ -199,6 +261,8 @@ def show_msg(conv, dic): #opt 1 de lo q llega
         pintar(conv, emisor, id, formato(time, msg))
     else:
         conv["no_leidos"] += 1
+
+    refrescar_barra()
 
 
 def delete_msg(conv, dic): #opt 2 de lo q llega
@@ -256,7 +320,7 @@ def drenar_cola():
                 esperando_mac[addr[0]].append(raw)
             else:
                 esperando_mac[addr[0]] = [raw]
-                threading.Thread(target=worker_arp, args=(addr[0], raw), daemon=True).start()
+                threading.Thread(target=worker_arp, args=(addr[0],), daemon=True).start()
             continue
 
         conv = obtener_conv(mac, addr[0])
@@ -266,21 +330,21 @@ def drenar_cola():
     root.after(100, drenar_cola)
 
 def worker_arp(ip):
-    resultado = scanner.single_arp(ip)              # lo único que bloquea
+    resultado = scanner.single_arp(ip)
     root.after(0, lambda: resolver_pendientes(ip, resultado))
 
 
 def resolver_pendientes(ip, resultado):
-    guardados = esperando_mac.pop(ip, [])           # 1. saca la lista Y borra la clave
+    guardados = esperando_mac.pop(ip, [])
 
-    if not resultado:                               # 2. el ARP no resolvió
+    if not resultado:
         return
 
-    mac = resultado[0]["mac"]                       # 3. ahora sí es seguro indexar
+    mac = resultado[0]["mac"]
     ip_a_mac[ip] = mac
     conv = obtener_conv(mac, ip)
 
-    for raw in guardados:                           # 4. drena TODO lo acumulado
+    for raw in guardados:
         procesar_paquete(conv, raw, ip)
 
 
@@ -340,28 +404,58 @@ def notificar(texto):
     tk.Label(ventana, text=texto).pack(padx=20, pady=10)
     ventana.after(3000, ventana.destroy)
 
-def mostrar_chat(root, receptor_ip, receptor_mac):
+def mostrar_conv(conv):
+    global conv_activa
 
-    conv = obtener_conv(receptor_mac, receptor_ip)
+    if conv is conv_activa:
+        return
 
-    paquete = crypto.envolver_handshake(crypto.my_public, "hs_init")
-    chat.send_msg(paquete, receptor_ip)
+    if not conv.get("contenedor"):
+        construir_chat(conv)
 
-    frame = tk.Frame(root)
-    header = tk.Frame(root)
+    snapshot = root.winfo_children()
+    for children in snapshot:
+        if children is barra:
+            continue
+        if children.winfo_manager() != "pack":
+            continue
+        children.pack_forget()
+
+    conv["contenedor"].pack(fill="both", expand=True)
+    conv_activa = conv
+    conv["no_leidos"] = 0
+    refrescar_barra()
+
+def construir_chat(conv):
+    contenedor = tk.Frame(root)
+
+    if conv["ip"] is not None:
+        paquete = crypto.envolver_handshake(crypto.my_public, "hs_init")
+        chat.send_msg(paquete, conv["ip"])
+
+    frame  = tk.Frame(contenedor)
+    header = tk.Frame(contenedor)
     header.pack(side="top", fill="x")
     frame.pack(fill="both", expand=True)
 
 
 
     def reintentar_handshake():
+        if conv["ip"] is None:
+            return
+
         if conv["fernet"] is not None:
             return
+
         if conv["intentos"] >= MAX_INTENTOS:
             conv["boton"].config(text="Sin conexión segura")
             messagebox.showwarning("Sin conexión segura", "No se pudo establecer una conversación cifrada.")
             return
-        chat.send_msg(crypto.envolver_handshake(crypto.my_public, "hs_init"), conv["ip"])
+
+        chat.send_msg(
+            crypto.envolver_handshake(crypto.my_public, "hs_init"),
+            conv["ip"]
+        )
         conv["intentos"] += 1
         root.after(TIMEOUT_MS, reintentar_handshake)
 
@@ -466,6 +560,7 @@ def mostrar_chat(root, receptor_ip, receptor_mac):
     conv["historial"] = historial
     conv["entrada"] = entrada
     conv["boton"] = boton
+    conv["contenedor"] = contenedor
 
     msg_recovery(conv["chat_storage"])
 

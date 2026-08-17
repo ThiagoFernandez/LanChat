@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 
 def load():
@@ -9,11 +10,18 @@ def load():
 
 
     for mac, v in agenda.items():
-        if isinstance(v, str):          # formato viejardo
-            agenda[mac] = {"username": v, "notif": True}
+        if isinstance(v, str):                    # formato viejardo
+            v = {"username": v, "notif": True}    # v pasa a ser el dict nuevo
+            agenda[mac] = v                       # y el diccionario apunta al MISMO objeto
+        if "ultimo" not in v:
+            v["ultimo"] = ""
+
     save(agenda)
     return agenda
 
+def register_contact(mac, agenda):
+    entry = _get_entry(mac, agenda)
+    save(agenda)
 
 def save(agenda):
     with open("agenda.json", "w", encoding="UTF-8") as f:
@@ -25,10 +33,21 @@ def get_username(mac, agenda):
     username = dictt["username"] if dictt is not None else None
     return username
 
+def get_ultimo(mac, agenda):
+    normalized_mac = normalizar_mac(mac)
+    dictt = agenda.get(normalized_mac)
+    ultimo = dictt["ultimo"] if dictt is not None else ""
+    return ultimo
+
 def set_username(mac, username, agenda):
     entry = _get_entry(mac, agenda)   # referencia adentro de agenda
     entry["username"] = username
     save(agenda)
+
+def set_ultimo(mac, iso, agenda):
+    entry = _get_entry(mac, agenda)
+    entry["ultimo"] = iso
+    save(agenda) # aunque podria dejar esta persistencia para cuando cierre el programa
 
 def toggle_notification( mac, agenda):
     entry = _get_entry(mac, agenda)   # referencia adentro de agenda
@@ -44,7 +63,7 @@ def get_notification( mac, agenda):
 def _get_entry(mac, agenda):
     mac = normalizar_mac(mac)
     if mac not in agenda:
-        agenda[mac] = {"username": None, "notif": True}
+        agenda[mac] = {"username": None, "notif": True, "ultimo": ""}
     return agenda[mac]
 
 def create_agenda():
