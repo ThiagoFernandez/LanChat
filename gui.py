@@ -176,26 +176,40 @@ def mostrar_red(root):
     entrada = tk.Entry(frame)
     entrada.pack(pady=5)
 
+    estado = tk.Label(frame)
+    estado.pack()
+
+    progreso = ttk.Progressbar(frame, mode="indeterminate")
+    progreso.pack(pady=5)
+
     def escanear():
         red = entrada.get().strip()
         if auxiliar.validate_ipv4(red) == -1:
             return
 
-        tk.Label(frame, text=f"Escaneando la red: {red}").pack()
         boton.config(state="disabled")
-        progreso = ttk.Progressbar(frame, mode="indeterminate")
-        progreso.pack(pady=5)
+        estado.config(text=f"Escaneando la red: {red}")
+
         progreso.start()
         threading.Thread(target=worker, args=(red,), daemon=True).start()
-
-
 
     boton = tk.Button(frame, text="Escanear", command=escanear)
     boton.pack(pady=10)
 
     def worker(red):
-        dispositivos = scanner.start_scanner(red)
-        root.after(0, lambda:finish(dispositivos))
+        try:
+            dispositivos = scanner.start_scanner(red)
+        except Exception as e:
+            root.after(0, lambda e=e: mostrar_error(e))
+            return
+
+        root.after(0, lambda: finish(dispositivos))
+
+    def mostrar_error(e):
+        progreso.stop()
+        estado.config(text="")
+        boton.config(state="normal")
+        messagebox.showerror("Error escaneando:", "Probar ejecutar como administrador")
 
     def finish(dispositivos):
         frame.destroy()
